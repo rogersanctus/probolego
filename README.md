@@ -9,6 +9,7 @@ Projeto de código para robô Lego NXT que deverá dentro de uma área demarcada
 Possíveis simuladores a serem usados:
 -------------------------------------
 
+*http://www.aplu.ch/home/apluhomex.jsp?site=75*
 *http://nxceditor.sourceforge.net/* <br />
 
 *http://schuelerlabor.informatik.rwth-aachen.de/simulator* <br/>
