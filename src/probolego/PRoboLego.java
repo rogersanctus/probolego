@@ -32,6 +32,22 @@ public class PRoboLego {
         while(true) // Laço 'infinito'
         {
             zigzag();
+            //me.forward();
+            //md.forward();
+            
+            if( viuCor( new Cor(sc.getColor()), new Cor(255,0,0), 40, 40 ))
+            {
+                me.backward();
+                md.backward();
+                Tools.delay(1000);
+                tempo += 1000;
+                
+                me.forward();
+                md.backward();
+                Tools.delay(1200);
+                tempo += 1200;
+            }
+            
             Tools.delay(1);
             tempo++;
         }
@@ -61,6 +77,24 @@ public class PRoboLego {
             me.forward();
             md.forward();
         }
+    }
+    
+    private boolean viuCor( Cor sensor, Cor cmp, int min, int max )
+    {
+        int rmin = Math.max(cmp.red - min, 0),
+            rmax = Math.min(cmp.red + max, 255),
+            gmin = Math.max(cmp.green - min, 0),
+            gmax = Math.min(cmp.green + max, 255),
+            bmin = Math.max(cmp.blue - min, 0),
+            bmax = Math.min(cmp.blue + max, 255);
+        
+        if( sensor.red >= rmin && sensor.red <= rmax &&
+            sensor.green >= gmin && sensor.green <= gmax &&
+            sensor.blue >= bmin && sensor.blue <= bmax )
+        {
+            return true;
+        }
+        return false;
     }
     
     public static void main(String[] args) { 
