@@ -1,196 +1,233 @@
-#include "funcs.h"
+#define P_SC   IN_3
+#define P_ST   IN_1
 
-/* Remover comentário para usar o sensor de toque. */
-#define LIGA_NO_TOUCH
+#define BRANCO      6
+#define PRETO       1
+#define AZUL        2
+#define VERDE       3
+#define AMARELO     4
+#define VERMELHO    5
 
-#define TCURVA      50
-#define TFRENTE     10
-#define VELCURVA    35
-#define VELFRENTE   10
+#define DIST_RODAS      11.6
+#define RAIO_RODA       2.8
 
-/*
- * Variáveis globais
+/**
+ * Movimenta o robô para frente por tempo tempo e com velocidade vel.
  */
-bool pAzul, tentarEsquerda;
-bool bVerde, bAzul;
-    
-int calibragem; // Passo de calibragem    
-    
-long int tTent, tBranco;
-    
-#ifndef LIGA_NO_TOUCH
-bool toque;     // Simula o sensor de toque
-#endif
+sub paraFrente( long tempo, char vel )
+{
+    OnFwd( OUT_AC, vel );
+    Wait( tempo );
+}
 
-void buscarLinha();
+/**
+ * Movimenta o robô para traz por tempo tempo e com velocidade vel.
+ */
+sub paraTraz( long tempo, char vel )
+{
+    OnRev( OUT_AC, vel );
+    Wait( tempo );
+}
+
+void girarRobo( char dir, long tempo, char vel )
+{
+     if( dir == 1 )
+     {
+          OnRev(OUT_A, vel);
+          OnFwd(OUT_C, vel);
+     }
+     else
+     {
+          OnFwd(OUT_A, vel);
+          OnRev(OUT_C, vel);          
+     }
+     Wait(tempo);
+}
 
 task main()
 {
-    #ifdef LIGA_NO_TOUCH
-    SetSensorTouch( IN_1 );
-    #endif
-    
-    SetSensorColorFull( IN_3 );
-    
-    calibragem = 0;
-    
-    pAzul = tentarEsquerda = true;
-    bAzul = bVerde = false;
-    
-    tTent = tBranco = 0;
+     int icor, ultimaCor, calibragem, estab, tent;
+     char esq;     
+     
+     SetSensorTouch( IN_1 );
+     SetSensorColorFull( IN_3 );
+     
+     esq = 0;
+     estab = 0;
+     calibragem = 0;
+     ultimaCor = BRANCO;
 
-    #ifndef LIGA_NO_TOUCH
-    toque = true; 
+     TextOut(0,LCD_LINE2, "ESPERA SENSOR");
+     
+     until( SENSOR_1 == 1 );
+     
+     // Um giro inicial ;)
+     RotateMotor(OUT_A, 75, 180);
+     
+     while( TRUE )
+     {
+          NumOut(0, LCD_LINE1, icor);
+          
+          if( SENSOR_3 == AMARELO )
+          {
+               TextOut( 0, LCD_LINE4, "ALVO ALCANÇADO" );
+               Off(OUT_AC);
+               until( SENSOR_1 == 1 );
+               calibragem = 0;
+          }
 
-    while(!toque);
-    #else
-    while(SENSOR_1 == 0); // Espera o sensor de toque para iniciar
-    #endif
-
-    while(true)
-    {
-        //paraFrente(100, 100);
-        OnFwd(OUT_AC, 30);
-        continue;
-        /* Objetivo alcançado. Nada mais a fazer. */
-        if( viuAmarelo() )
-        {
-            TextOut(0, TEXTLINE_1, "Objetivo Alcancado...");
-            Off( OUT_AC );
-            
-            #ifndef LIGA_NO_TOUCH
-            StopAllTasks();
-            #else
-            // Verifica se o Sensor foi precionado
-            if( !SENSOR_1 )
-            {
-                continue;
-            }            
-            #endif
-        }
-        
-        if( viuVermelho() )
-        {
-            TextOut(0, TEXTLINE_1, "Voltando para area branca.");
-            paraTraz(1000, 70);
-            girarRobo(false, 1000, 70);
-        }
-        
-        buscarLinha();
-        
-        if( calibragem == 0 || calibragem > 2 )
-        {
-            TextOut(0, TEXTLINE_1, "Buscando objetivo...");
-            paraFrente(1, 100);
-        }
-    }
-}
-
-void buscarLinha()
-{    
-    if( calibragem == 0 )
-    {
-        if( viuAzul() ) bAzul = true;
-        if( viuVerde() ) bVerde = true;
-        
-        if( bAzul )
-        {
-            girarRobo( tentarEsquerda, TCURVA, VELCURVA );
-            paraFrente( TFRENTE, VELFRENTE );
-            
-            if( viuBranco() ) tentarEsquerda = !tentarEsquerda;
-            
-            if( viuVerde() )
-            {
-                bAzul = false;
-                calibragem = 1;
-                pAzul = true;
-            }
-        }else
-        if( bVerde )
-        {
-            girarRobo( tentarEsquerda, TCURVA, VELCURVA );
-            paraFrente( TFRENTE, VELFRENTE );
-            
-            if( viuBranco() ) tentarEsquerda = !tentarEsquerda;
-            
-            if( viuAzul() )
-            {
-                bVerde = false;
-                calibragem = 1;
-                pAzul = false;
-            }
-        }
-    }else if( calibragem == 1 )
-    {
-        if( pAzul )
-        {
-            if( !viuAzul() )
-            {
-                girarRobo(!tentarEsquerda, TCURVA, VELCURVA);
-                paraFrente(TFRENTE, 0); /* !!! VERIFICAR VALORES > 0 */
-                
-                if( viuBranco() ) tentarEsquerda = !tentarEsquerda;
-            }else calibragem = 2;
-        }else
-        {
-            if( !viuVerde() )
-            {
-                girarRobo(!tentarEsquerda, TCURVA, VELCURVA);
-                paraFrente(TFRENTE, 0); /* !!! VERIFICAR VALORES > 0 */
-                
-                if( viuBranco() ) tentarEsquerda = !tentarEsquerda;
-            }else calibragem = 2;
-        }
-    }else
-    {
-        girarRobo(tentarEsquerda, TCURVA, VELCURVA);
-        paraFrente(TFRENTE, 10);
-        
-        if( viuAzul() ) bAzul = true;
-        if( viuVerde() ) bVerde = true;
-        
-        if( bAzul )
-        {
-            if( viuVerde() )
-            {
-                tentarEsquerda = !tentarEsquerda;
-                bAzul = false;
-            }
-        }
-        
-        if( bVerde )
-        {
-            if( viuAzul() )
-            {
-                tentarEsquerda = !tentarEsquerda;
-                bVerde = false;
-            }
-        }
-        
-        if( viuBranco() )
-        {
-            if( tTent >= 10 )
-            {
-                paraTraz( 100, 20 );
-                
-                OnRev( OUT_A, 50 );
-                OnFwd( OUT_C, 50 );
-                Wait( 1500 );
-                
-                tTent = 0;
-                tBranco = -35;  // ;)
-                calibragem = 0;
-                
-                tentarEsquerda = !tentarEsquerda;
-            }
-            else if( tBranco >= 5 )
-            {
-                paraTraz( 50, 20 );
-                tBranco = 0;
-            }
-            tBranco++;
-            tTent++;
-        }
-    }    
+          // Vai para traz e depois faz um giro de 45 graus em torno do motor C.
+          if( SENSOR_3 == VERMELHO )
+          {
+               paraTraz( 350, 75 );
+               RotateMotor(OUT_A, 75, 45.0 * DIST_RODAS / RAIO_RODA );
+          }
+          else
+          {
+               // Se encontrou uma das duas linhas, inicia a calibragem inicial.
+               if( SENSOR_3 == AZUL || SENSOR_3 == VERDE )
+               {
+                    if( calibragem == 0 )
+                    {                        
+                         ultimaCor = SENSOR_3;
+                         calibragem = 1;
+                    }
+               }               
+               
+               // Calibragem mais demorada.
+               // Busca que o robô fique mais estabilisado nas linhas
+               // de forma que fique o mais paralelo a elas possível.
+               if( calibragem == 1 )
+               {                    
+                    icor = SENSOR_3;
+                    if( (icor == AZUL || icor == VERDE) && ultimaCor != icor )
+                    {
+                         if(esq == 1)
+                         {
+                              esq = 0;
+                         }
+                         else
+                         {
+                              esq = 1;
+                         }
+                         ultimaCor = icor;
+                         estab++;
+                         tent = 0;
+                    }
+                    else if( SENSOR_3 == BRANCO && tent == 0 )
+                    {
+                         if(esq == 1)
+                         {
+                              esq = 0;
+                         }
+                         else
+                         {
+                              esq = 1;
+                         }
+                         
+                         tent = 1;
+                         TextOut(0, LCD_LINE6, "PORRA");                         
+                    }
+                    
+                    girarRobo( esq, 1, 55 );
+                    paraFrente(1,10);
+                    
+                    if( estab >= 10)
+                    {
+                         calibragem = 2;
+                         estab = 0;
+                    }
+               }
+               
+               // Estágio de deslocamento rápido.
+               if( calibragem == 2 )
+               {
+                    icor = SENSOR_3;
+                    if( (icor == AZUL || icor == VERDE) && ultimaCor != icor )
+                    {
+                         //esq = !esq;
+                         if(esq == 1)
+                         {
+                              esq = 0;
+                         }
+                         else
+                         {
+                              esq = 1;
+                         }
+                         ultimaCor = icor;
+                         estab++;
+                         tent = 0;
+                    }
+                    
+                    if( esq == 1 )
+                    {
+                         RotateMotor( OUT_C, 75, 5 );
+                    }
+                    else
+                    {
+                         RotateMotor( OUT_A, 75, 5 );
+                    }
+                    
+                    // Deu alguns giros e não achou a outra cor?
+                    if( SENSOR_3 == BRANCO )
+                    {
+                         tent++;
+                    }
+                    
+                    if( tent >= 600 )
+                    {
+                         if(esq == 1)
+                         {
+                              esq = 0;
+                         }
+                         else
+                         {
+                              esq = 1;
+                         }
+                         tent = 0;
+                    }
+                    
+                    // Se viu o branco e já está estável
+                    if( SENSOR_3 == BRANCO && estab >= 4 )
+                    {
+                         calibragem = 3;
+                    }
+               }
+               
+               // Estágio de recuperação. Inverte o percurso nas linhas.
+               if( calibragem == 3 )
+               {
+                    // Ir para traz prox de onde estava antes.
+                    RotateMotor( OUT_AC, 50, -140 );
+                    
+                    // Gira o robo 180 graus com deslocamento para frente igual
+                    // a distancia entre as rodas.
+                    RotateMotor( OUT_C, 75, 90.0 * DIST_RODAS / RAIO_RODA );
+                    RotateMotor( OUT_A, 75, -90.0 * DIST_RODAS / RAIO_RODA );
+                    
+                    //esq = !esq;
+                    if(esq == 1)
+                    {
+                         esq = 0;
+                    }
+                    else
+                    {
+                         esq = 1;
+                    }
+                    
+                    // Volta ao segundo estágio de calibração.
+                    calibragem = 2;
+               }
+               
+               NumOut(0, LCD_LINE3, esq);
+               NumOut(0, LCD_LINE4, icor);
+               NumOut(0, LCD_LINE5, ultimaCor);
+               
+               // Estado inicial. Busca pelas linhas.
+               if(calibragem == 0)
+               {
+                    paraFrente(1, 75);
+               }
+          }
+     }
 }
