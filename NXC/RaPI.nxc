@@ -1,0 +1,280 @@
+#define P_ST			IN_1
+#define P_SC			IN_2
+
+#define PRETO			INPUT_BLACKCOLOR
+#define AZUL			INPUT_BLUECOLOR
+#define VERDE			INPUT_GREENCOLOR
+#define AMARELO			INPUT_YELLOWCOLOR
+#define VERMELHO		INPUT_REDCOLOR
+#define BRANCO			INPUT_WHITECOLOR
+
+#define MAX_AMOSTRAS	30		// Escolher SEMPRE um valor menor que 256
+#define ESTABIL			3
+
+enum ESTAGIOS { INICIO = 0, SCAN, SEGUIR, FINAL };
+
+void girarEsquerdaMotC( char vel )
+{
+	OnFwd( OUT_A, vel );
+	Float( OUT_C );	
+}
+
+void girarDireitaMotA( char vel )
+{
+	OnFwd( OUT_C, vel );
+	Float( OUT_A );	
+}
+
+task main()
+{
+	// MAX_AMOSTRAS amostras de cores RGB + BLANK
+	unsigned int amostrasRGB[MAX_AMOSTRAS][4];
+	unsigned long mediaAmostras = 0, maxAmostra = 0, minAmostra = 0;
+	int i, corAnterior;
+	char estagio = 0, estab = 0;
+
+	SetSensorTouch( P_ST );
+	SetSensorColorFull( P_SC );	
+
+	until(Sensor(P_ST) != 0);
+	
+	while(1)
+	{
+		if( Sensor(P_SC) == VERMELHO )
+		{
+			OnRev(OUT_AC, 80);
+			Wait(1100);
+			OnFwd(OUT_A, 75);
+			OnRev(OUT_C, 75);
+			Wait( 900 );
+		}else if( Sensor(P_SC) == AMARELO )
+		{
+			estagio = FINAL;
+		}
+		
+		if( estagio == INICIO )
+		{
+			if( Sensor(P_SC) == VERDE )
+			{
+				// Garantir uma cor diferente de verde
+				while(Sensor(P_SC) != AZUL)
+				{
+					girarEsquerdaMotC(85);
+				
+					if(Sensor(P_SC) == AMARELO)
+					{
+						estagio = FINAL;
+						break;
+					}
+				}
+				
+				// Tentar alinhar o robô
+				while(Sensor(P_SC) != VERDE)
+				{
+					girarEsquerdaMotC(85);
+					
+					if(Sensor(P_SC) == AMARELO)
+					{
+						estagio = FINAL;
+						break;
+					}
+					
+					if( Sensor(P_SC) != VERDE )					
+						corAnterior = Sensor(P_SC);					
+				}
+				
+				if( corAnterior == BRANCO )
+				{
+					while( estab < ESTABIL )
+					{
+						girarEsquerdaMotC(85);
+						until( Sensor(P_SC) == AZUL );
+						girarDireitaMotA(85);
+						until( Sensor(P_SC) == VERDE );
+						estab++;
+					}
+					
+					// Giro em torno do centro dos eixos
+					OnFwd( OUT_A, 75 );
+					OnRev( OUT_C, 75 );
+					until( Sensor(P_SC) == AZUL );
+					until( Sensor(P_SC) == VERDE );					
+				}
+				
+				estagio = SCAN;
+				estab = 0;				
+			}else			
+			if( Sensor(P_SC) == AZUL )
+			{
+				// Garantir uma cor diferente de Azul
+				while(Sensor(P_SC) != VERDE )
+				{
+					girarDireitaMotA(85);
+				
+					if(Sensor(P_SC) == AMARELO)
+					{
+						estagio = FINAL;
+						break;
+					}
+				}
+				
+				// Tentar alinhar o robô
+				while(Sensor(P_SC) != AZUL)
+				{
+					girarDireitaMotA(85);
+					
+					if(Sensor(P_SC) == AMARELO)
+					{
+						estagio = FINAL;
+						break;
+					}
+					
+					if( Sensor(P_SC) != AZUL )					
+						corAnterior = Sensor(P_SC);					
+				}
+				
+				if( corAnterior == BRANCO )
+				{
+					while( estab < ESTABIL )
+					{
+						girarDireitaMotA(85);
+						until( Sensor(P_SC) == VERDE );
+						girarEsquerdaMotC(85);
+						until( Sensor(P_SC) == AZUL );
+						estab++;
+					}
+					
+					// Giro em torno do centro dos eixos
+					OnFwd( OUT_A, 75 );
+					OnRev( OUT_C, 75 );
+					until( Sensor(P_SC) == VERDE );					
+				}
+				
+				estagio = SCAN;
+				estab = 0;				
+			}
+			else
+			{
+				OnFwd(OUT_AC, 80);
+			} /* Nem viu verde, nem azul */
+		} else
+		if( estagio == SCAN )
+		{
+			Off(OUT_AC);
+			i = MAX_AMOSTRAS / 2;
+			ReadSensorColorRaw(P_SC, amostras[i]);
+			
+			// Amostras do Verde até o branco
+			until( i == 1 && Sensor(P_SC) == BRANCO )
+			{
+				OnFwd( OUT_A, 70 );
+				OnRev( OUT_C, 70 );
+				ReadSensorColorRaw(P_SC, amostras[i]);
+				
+				if( i > 1 )
+					i--;
+				Wait(50);
+			}
+			Wait(100);
+			// Amostra do branco
+			ReadSensorColorRaw(P_SC, amostras[i]);
+			
+			// Retorna 
+			until( Sensor(P_SC) == AZUL )
+			{
+				OnFwd( OUT_C, 70 );
+				OnRev( OUT_A, 70 );
+			}
+			
+			i = MAX_AMOSTRAS / 2 + 1;
+			// Amostras do Azul ao branco
+			until( i == MAX_AMOSTRAS - 1 && Sensor(P_SC) == BRANCO )
+			{
+				ReadSensorColorRaw(P_SC, amostras[i]);
+				if( i < MAX_AMOSTRAS - 1 )
+					i++;
+				Wait(50);
+			}
+			
+			// Volta ao verde
+			OnFwd( OUT_A, 70 );
+			OnRev( OUT_C, 70 );
+			until( Sensor(P_SC) == VERDE );
+			Off(OUT_AC);
+			
+			// Cálculo da média das amostras
+			for( i = 0; i < MAX_AMOSTRAS; ++i )
+			{
+				long nRGB;
+
+				/* Os valores vão de 0 a 1023. 1024 ocupam 11 bits. Porém 11 x 3 = 33 bits.
+				 * E nenhuma dos tipos de dados do NXC suporta mais que 32 bits.
+				 * Assim, como é necessário guardar os três componentes e ainda somar N amostras desses valores,
+				 * Vamos dividir um pouco esses valores, de maneira a obter um espaço extra de bits.
+				 */
+				amostras[i][0] /= 4;				// Dividindo por 4 obtemos no máximo o valor de 255 (Ocupa 8 bits).
+				amostras[i][1] /= 4;
+				amostras[i][2] /= 4;
+				nRGB = amostras[i][0] << 16;	// Passa o Red 8 + 8 bits para a esquerda. (Apenas R 00000000 00000000)
+				nRGB = nRGB | amostras[i][1] << 8;	// Passa o Green 8 bits para a esquerda e mistura com o vermelho. (Até agora R G 00000000)
+				nRGB = nRGB | amostras[i];			// Mistura o Blue com o vermelho e verde. (Agora: R G B)
+				
+				/* nRGB vai ter um valor de no máximo 2 ^ 24 = 16777215
+				 * Portanto, podem ainda ser somados à mediaAmostras: 4294967296 / 16777215 ~= 256 valores. */
+				 
+				// A primeira amostra é a mínima e a máxima para todo caso.
+				if( i == 0 )
+				{
+					minAmostra = maxAmostra = nRGB;
+				}
+				else
+				{
+					if( nRGB < minAmostra ) minAmostra = nRGB;
+					if( nRGB > maxAmostra ) maxAmostra = nRGB;
+				}
+				
+				mediaAmostras += nRGB;
+			}
+			mediaAmostras /= MAX_AMOSTRAS;
+			
+			// Agora deixa a matemática guiar o Robô.
+			estagio = SEGUIR;
+		} else
+		if( estagio == SEGUIR )
+		{
+			if( Sensor(P_SC) == AMARELO )
+			{
+				estagio = FINAL;
+			}
+			else
+			{
+				int vGiro = 0;
+				unsigned int rgb[4];
+				long cmp = 0;					// A cor RGB atual a ser comparada.
+				
+				ReadSensorColorRaw( P_SC, rgb );
+				rgb[0] /= 4;
+				rgb[1] /= 4;
+				rgb[2] /= 4;
+				cmp = rgb[0] << 16 | rgb[1] << 8 | rgb[2];
+				
+				vGiro = 90 + 100 * (mediaAmostras - cmp) / (maxAmostra - minAmostra);
+				
+				if( vGiro > 100 ) vGiro = 100;
+				if( vGiro < 0 ) vGiro = 0;
+				OnFwd( OUT_C, vGiro );
+				
+				vGiro = 90 - 100 * (mediaAmostras - cmp) / (maxAmostra - minAmostra);
+				
+				if( vGiro > 100 ) vGiro = 100;
+				if( vGiro < 0 ) vGiro = 0;
+				OnFwd( OUT_A, vGiro );
+			}
+		} else
+		if( estagio == FINAL )
+		{
+			Off(OUT_AC);
+			StopAllTasks();
+		}		
+	}
+}
